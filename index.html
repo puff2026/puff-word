@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>단어 친구 푸프 : 영어사전</title>
+    <link rel="preload" as="image" href="https://gist.github.com/user-attachments/assets/1d738b70-632b-4017-917c-31ec6d093b73">
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    
+    <style>
+        :root { 
+            --main-blue: #4C6EF5; 
+            --accent-purple: #6E7FF5; 
+            --bg-light: #F8F9FB; 
+            --card-white: #FFFFFF;
+            --input-text: #4A4A4A;
+            --icon-gray: #9EA4B0;
+        }
+        
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Pretendard', sans-serif; margin: 0; background-color: var(--bg-light); overflow-x: hidden; color: var(--input-text); }
+
+        /* 스플래시 화면 (애니메이션 제거 및 정적 변경) */
+        #splash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-light); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.5s ease; }
+        /* .splash-logo에서 pulse 애니메이션을 삭제하여 즉시 뜨게 함 */
+        .splash-logo { width: 120px; height: 120px; object-fit: contain; }
+        .splash-title { color: var(--main-blue); font-size: 1.2rem; font-weight: 900; letter-spacing: -1px; margin-top: 15px; }
+
+        .main-content { opacity: 0; transition: opacity 0.5s ease; }
+        .app-header { padding: 40px 20px 10px; text-align: center; }
+        .welcome-msg { font-size: 0.8rem; color: #8E94A5; font-weight: 700; display: block; margin-bottom: 6px; }
+        .app-header h1 { font-size: 1.6rem; font-weight: 900; margin: 0; color: #212529; letter-spacing: -1.2px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .header-puff { width: 35px; height: 35px; object-fit: contain; }
+
+        .section { display: none; padding: 10px 20px 120px; max-width: 500px; margin: 0 auto; min-height: 60vh; }
+        .section.active { display: block; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 검색바 디자인 */
+        .search-wrapper { position: relative; display: flex; align-items: center; width: 100%; max-width: 400px; margin: 25px auto 10px; background: #FFFFFF; border-radius: 50px; padding: 6px 8px 6px 18px; box-shadow: 0 10px 25px rgba(0,0,0,0.04); }
+        .search-icon-svg { width: 20px; height: 20px; margin-right: 10px; stroke: var(--icon-gray); stroke-width: 2.5; fill: none; }
+        .search-input-new { flex: 1; border: none; outline: none; font-size: 1rem; font-weight: 600; color: var(--input-text); background: transparent; }
+        .search-submit-btn { width: 42px; height: 42px; background: var(--accent-purple); border-radius: 16px; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; }
+
+        /* 결과 카드 스타일 */
+        .res-card { background: var(--card-white); border-radius: 30px; padding: 30px 20px 40px; box-shadow: 0 20px 40px rgba(0,0,0,0.06); margin-top: 20px; text-align: center; position: relative; }
+        .close-btn { position: absolute; top: 15px; right: 20px; color: #ADB5BD; font-size: 1.3rem; cursor: pointer; }
+        .word-eng { font-size: 2.2rem; font-weight: 900; color: var(--main-blue); margin: 0; letter-spacing: -1px; word-break: break-all; }
+        .word-kor { font-size: 1.6rem; font-weight: 800; margin: 15px 0 25px; color: #343A40; background: #F8F9FA; padding: 12px; border-radius: 20px; border: 1.5px dashed #D1D9FF; }
+        .circle-audio-btn { width: 70px; height: 70px; background: var(--accent-purple); border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; margin: 0 auto; cursor: pointer; box-shadow: 0 10px 25px rgba(110, 127, 245, 0.4); }
+        .speaker-svg-white { width: 30px; height: 30px; stroke: white; stroke-width: 2; fill: none; }
+
+        .word-list-item { background: white; padding: 18px 22px; border-radius: 22px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 8px 15px rgba(0,0,0,0.03); }
+        .item-info-box { flex: 1; cursor: pointer; overflow: hidden; margin-right: 10px; }
+        .item-info-box b { font-size: 1.15rem; color: #212529; display: block; margin-bottom: 2px; }
+        .item-info-box span { color: var(--main-blue); font-weight: 700; font-size: 0.95rem; }
+        .list-speaker-box { width: 40px; height: 40px; background: #F0F3FF; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-left: 10px; cursor: pointer; flex-shrink: 0; }
+        .speaker-svg-purple { width: 18px; height: 18px; stroke: var(--accent-purple); stroke-width: 2.5; fill: none; }
+        .del-btn { color: #FF8787; font-size: 1.1rem; cursor: pointer; padding: 10px; }
+
+        /* 네비게이션 및 미니 beta 배지 */
+        .bottom-nav { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; height: 75px; background: white; border-radius: 35px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); display: flex; justify-content: space-around; align-items: center; z-index: 1000; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--icon-gray); font-size: 0.75rem; font-weight: 800; cursor: pointer; flex: 1; position: relative; }
+        .nav-item.active { color: var(--main-blue); }
+        .nav-svg { width: 24px; height: 24px; margin-bottom: 4px; stroke: currentColor; stroke-width: 2.2; fill: none; }
+        .beta-mini-badge { position: absolute; top: 12px; right: 18%; font-size: 0.5rem; background: #E9ECEF; color: #868E96; padding: 1px 4px; border-radius: 6px; font-weight: 900; line-height: 1; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <div id="splash">
+        <img src="https://gist.github.com/user-attachments/assets/1d738b70-632b-4017-917c-31ec6d093b73" class="splash-logo" alt="Puff">
+        <div class="splash-title">푸프</div>
+        <div class="splash-sub">엄마랑 AI가 함께 만든 영어사전</div>
+    </div>
+
+    <div id="crop-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:30000; flex-direction:column; align-items:center; justify-content:center;">
+        <div style="width:100%; height:75%; position:relative; display:flex; align-items:center; justify-content:center;">
+            <img id="crop-image" style="max-width:100%; max-height:100%;">
+        </div>
+        <div style="display:flex; gap:15px; margin-top:25px; width:90%; justify-content:center;">
+            <button onclick="closeCrop()" style="flex:1; padding:18px; border-radius:15px; background:#444; color:white; font-weight:800; border:none;">취소</button>
+            <button onclick="confirmCrop()" style="flex:1; padding:18px; border-radius:15px; background:var(--main-blue); color:white; font-weight:800; border:none;">단어 읽기</button>
+        </div>
+    </div>
+
+    <div id="custom-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:40000; align-items:center; justify-content:center; padding:20px;">
+        <div style="background:white; width:100%; max-width:320px; border-radius:25px; padding:30px 20px; text-align:center;">
+            <div style="font-size:1.1rem; font-weight:800; color:#212529; margin-bottom:20px; line-height:1.4;">인식된 단어가 맞나요?<br>틀렸다면 고쳐주세요!</div>
+            <input type="text" id="modal-input" style="width:100%; padding:15px; border-radius:15px; border:2px solid #F0F3FF; margin-bottom:20px; font-size:1.1rem; text-align:center; outline:none;">
+            <div style="display:flex; gap:10px;">
+                <button id="modal-cancel-btn" style="flex:1; padding:15px; border-radius:15px; border:none; background:#E9ECEF; font-weight:800;">취소</button>
+                <button id="modal-confirm-btn" style="flex:1; padding:15px; border-radius:15px; border:none; background:var(--main-blue); color:white; font-weight:800;">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content" id="main-ui">
+        <header class="app-header">
+            <span class="welcome-msg">엄마랑 AI가 함께 만든 영어사전</span>
+            <h1>단어 친구 푸프 <img src="https://gist.github.com/user-attachments/assets/1d738b70-632b-4017-917c-31ec6d093b73" class="header-puff"></h1>
+        </header>
+
+        <section id="page-search" class="section active">
+            <div class="search-wrapper">
+                <svg class="search-icon-svg" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="q" class="search-input-new" placeholder="어떤 단어가 궁금해?" onkeypress="if(event.keyCode==13) fetchTranslation(this.value, false)">
+                <button class="search-submit-btn" onclick="fetchTranslation(document.getElementById('q').value, false)">➔</button>
+            </div>
+            <div id="loading-main" style="display:none; text-align:center; color:var(--main-blue); font-weight:700; margin-top:20px;">푸프가 뜻을 찾는 중...</div>
+            <div id="result-display" style="display:none;"></div>
+        </section>
+
+        <section id="page-camera" class="section">
+            <div onclick="document.getElementById('cam-input').click()" style="width:100%; height:200px; border:2.5px dashed #D1D9FF; border-radius:35px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:white; cursor:pointer;">
+                <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" stroke-width="1.8"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                <p style="font-weight: 800; font-size: 1.1rem; margin-top: 12px;">영어 단어 사진 찍기</p>
+            </div>
+            <input type="file" id="cam-input" accept="image/*" capture="environment" onchange="startCrop(this)" style="display:none;">
+            <div id="loading" style="display:none; text-align:center; color:var(--main-blue); font-weight:700; margin-top:20px;">푸프가 분석 중...</div>
+            <div id="cam-result-display" style="display:none;"></div>
+        </section>
+
+        <section id="page-book" class="section">
+            <h2 style="font-weight:900; margin-bottom: 20px; font-size:1.3rem;">나의 단어장 ⭐</h2>
+            <div id="word-list-box"></div>
+        </section>
+
+        <nav class="bottom-nav">
+            <div class="nav-item active" onclick="switchPage('search', this)">
+                <svg class="nav-svg" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <span>단어 찾기</span>
+            </div>
+            <div class="nav-item" onclick="switchPage('camera', this)">
+                <div class="beta-mini-badge">beta</div>
+                <svg class="nav-svg" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                <span>찰칵 검색</span>
+            </div>
+            <div class="nav-item" onclick="switchPage('book', this)">
+                <svg class="nav-svg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                <span>단어장</span>
+            </div>
+        </nav>
+    </div>
+
+    <script>
+        /* 자바스크립트 로직 유지 */
+        let words = JSON.parse(localStorage.getItem('myWords')) || [];
+        let cropper = null;
+
+        const speakerIcon = (colorClass) => `
+            <svg class="${colorClass}" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+        `;
+
+        window.onload = () => {
+            setTimeout(() => {
+                document.getElementById('splash').style.opacity = '0';
+                document.getElementById('main-ui').style.opacity = '1';
+                setTimeout(() => document.getElementById('splash').style.display = 'none', 500);
+            }, 1800);
+            renderList();
+        };
+
+        function switchPage(pageId, el) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('page-' + pageId).classList.add('active');
+            el.classList.add('active');
+        }
+
+        async function fetchTranslation(w, isCamera) {
+            if (!w) return;
+            const loader = isCamera ? document.getElementById('loading') : document.getElementById('loading-main');
+            loader.style.display = 'block';
+            try {
+                const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q=${w}`);
+                const data = await res.json();
+                displayResult(w, data[0][0][0], isCamera);
+            } catch (e) { alert("연결 실패!"); }
+            loader.style.display = 'none';
+        }
+
+        function displayResult(w, kor, isCamera) {
+            const targetId = isCamera ? 'cam-result-display' : 'result-display';
+            document.getElementById(targetId).innerHTML = `
+                <div class="res-card">
+                    <div class="close-btn" onclick="document.getElementById('${targetId}').style.display='none'">✕</div>
+                    <h1 class="word-eng">${w.charAt(0).toUpperCase() + w.slice(1)}</h1>
+                    <div class="word-kor">${kor}</div>
+                    <button class="circle-audio-btn" onclick="playAudio('${w}')">
+                        ${speakerIcon('speaker-svg-white')}
+                    </button>
+                </div>
+            `;
+            document.getElementById(targetId).style.display = 'block';
+            if(!words.find(i => i.w === w)) {
+                words.unshift({w: w, k: kor});
+                localStorage.setItem('myWords', JSON.stringify(words));
+                renderList();
+            }
+        }
+
+        function renderList() {
+            const box = document.getElementById('word-list-box');
+            if (words.length === 0) { box.innerHTML = '<p style="text-align:center; color:#ADB5BD; padding-top:60px;">단어장이 비어있어요.</p>'; return; }
+            box.innerHTML = words.map((i, idx) => `
+                <div class="word-list-item">
+                    <div class="item-info-box" onclick="playAudio('${i.w}')">
+                        <b>${i.w.charAt(0).toUpperCase() + i.w.slice(1)}</b>
+                        <span>${i.k}</span>
+                    </div>
+                    <div class="list-speaker-box" onclick="playAudio('${i.w}')">
+                        ${speakerIcon('speaker-svg-purple')}
+                    </div>
+                    <div class="del-btn" onclick="deleteWord(${idx})">✕</div>
+                </div>
+            `).join('');
+        }
+
+        function deleteWord(idx) {
+            words.splice(idx, 1);
+            localStorage.setItem('myWords', JSON.stringify(words));
+            renderList();
+        }
+
+        function playAudio(w) {
+            window.speechSynthesis.cancel();
+            const ut = new SpeechSynthesisUtterance(w);
+            ut.lang = 'en-US';
+            window.speechSynthesis.speak(ut);
+        }
+
+        function startCrop(input) {
+            if (!input.files[0]) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = document.getElementById('crop-image');
+                img.src = e.target.result;
+                document.getElementById('crop-container').style.display = 'flex';
+                if (cropper) cropper.destroy();
+                cropper = new Cropper(img, { 
+                    viewMode: 1, 
+                    autoCropArea: 0.5, 
+                    background: false, 
+                    modal: true, 
+                    guides: true, 
+                    highlight: false 
+                });
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+
+        function closeCrop() { 
+            document.getElementById('crop-container').style.display = 'none'; 
+            if(cropper) cropper.destroy();
+        }
+
+        async function confirmCrop() {
+            const canvas = cropper.getCroppedCanvas();
+            document.getElementById('crop-container').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+            try {
+                const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
+                let lines = text.split('\n');
+                let validLine = lines.find(l => l.replace(/[^a-zA-Z]/g, '').trim().length > 0) || "";
+                let cleanWord = validLine.replace(/[^a-zA-Z]/g, ' ').trim().split(' ')[0].toLowerCase();
+                
+                document.getElementById('loading').style.display = 'none';
+                
+                if(cleanWord && cleanWord.length > 1) {
+                    openEditModal(cleanWord);
+                } else {
+                    alert("단어를 읽지 못했어요. 다시 시도해 주세요!");
+                }
+            } catch (e) { 
+                alert("인식 실패!"); 
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function openEditModal(word) {
+            const modal = document.getElementById('custom-modal');
+            const input = document.getElementById('modal-input');
+            input.value = word;
+            modal.style.display = 'flex';
+
+            document.getElementById('modal-confirm-btn').onclick = () => {
+                modal.style.display = 'none';
+                fetchTranslation(input.value.trim(), true);
+            };
+            document.getElementById('modal-cancel-btn').onclick = () => {
+                modal.style.display = 'none';
+            };
+        }
+    </script>
+</body>
+</html>
